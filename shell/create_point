@@ -1,0 +1,36 @@
+#!/bin/bash
+
+if [[ -z $2 ]];then
+    echo "从指定目录读取png文件并生成组成图片对应多边形的点"
+    echo "      uage:$0 [DIR | *.png] [TARGET_FILE],command run in current directory"
+    exit
+fi
+
+if ! [[ -d $1 ]]; then
+    if ! [[ $1 =~ ".png" ]]; then
+        echo "$1 not DIR or *.png"
+        exit
+    fi
+fi
+
+if  [[ -e $2 ]]; then
+    echo "$2 already exist"
+    read -p "Do you want to continue [Y/N]?" answer 
+    case $answer in 
+        Y | y) 
+            echo "ok,continue...";; 
+        *) 
+            echo "exit"
+            exit;;
+    esac
+fi
+
+for file in `find $1 -name "*.png"`
+do
+    echo `basename $file` >> $2
+    VertexScanner -r 1 -c 1 $file | sed '1,/.*/d' >> $2 
+    echo >> $2
+done
+
+echo "done. create $2 successful"
+

@@ -1,0 +1,18 @@
+#!/bin/bash
+
+if [[ -z $2 ]];then
+    echo "uage:find_str [FILE] [STR],command run in current directory"
+    exit
+fi
+
+#find string in current directory file,show string from file name
+for file in `find . -name "$1" -type f`
+do
+    cat $file | grep $2
+    #test previous command run result
+    if [[ $? -eq 0 ]]; then
+        echo 'from '$file
+        echo
+    fi
+done
+
