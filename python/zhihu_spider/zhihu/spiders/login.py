@@ -8,8 +8,9 @@ from scrapy.http import Request,FormRequest
 from zhihu.settings import *
 
 from zhihu.helper import helper
+import termcolor
 
-import sys, random
+import sys, random, time
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
@@ -30,20 +31,27 @@ class LoginSpider(Spider):
         helper.Logger.debug(s)
 
     def start_requests(self):
-        return [Request("http://www.zhihu.com", headers = self.headers, meta={"cookiejar":1}, callback = self.post_login)]
+        return [Request("http://www.zhihu.com", headers = self.headers, meta={"cookiejar":1}, callback = self.get_captcha)]
+
+    def get_captcha(self, response):
+        self._xsrf = Selector(response).xpath('//input[@name="_xsrf"]/@value').extract()[0]
+        return Request(
+                'http://www.zhihu.com/captcha.gif?r='+str(int(time.time()*1000))+'&type=login',
+                meta={'cookiejar':response.meta['cookiejar']},
+                headers = self.headers,
+                callback=self.post_login)
 
     def post_login(self, response):
         self.log('正在登陆...')
-        xsrf = Selector(response).xpath('//input[@name="_xsrf"]/@value').extract()[0]
-        captcha = helper.get_captcha("https://www.zhihu.com/captcha.gif", params={"r":random.random(), "type":"login"}, headers=self.headers)
         return [FormRequest(
             "http://www.zhihu.com/login/phone_num",
             formdata = {
                 '_xsrf':'zzzzzzzzzzz',
                 'password':'xxxxx',
+                '_xsrf':self._xsrf,
                 'remember_me':'true',
                 'phone_num':'yyyyy',
-                'captcha':captcha,
+                'captcha':helper.gen_captcha(response.body, response.headers['content-type'].split('/')[1]),
             },
             meta={'cookiejar':response.meta['cookiejar']},
             headers = HEADER,

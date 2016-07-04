@@ -6,8 +6,13 @@ from zhihu.items import ZhihuItem
 from scrapy.http import Request,FormRequest
 from zhihu.settings import *
 
+import sys
+reload(sys)
+sys.setdefaultencoding('utf-8')
+
 class ExampleSpider(Spider):
     name = "example"
+    allowed_domains = ["zhihu.com"]
 
     start_urls = [ "http://www.zhihu.com/explore", ]
 
