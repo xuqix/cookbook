@@ -3,16 +3,17 @@ from scrapy.selector import Selector
 from scrapy.spiders import CrawlSpider, Rule
 from scrapy.linkextractors import LinkExtractor
 
-from zhihu.items import ZhihuItem
+from zhihu.items import ZhihuUser
 
 from scrapy.http import Request,FormRequest
 from zhihu.settings import *
 
 from zhihu.helper import helper
 import termcolor
-import re
+import re, json
+from urllib import urlencode
 
-import sys, random, time
+import sys, random, time, datetime
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
@@ -78,7 +79,7 @@ class UserInfoSpider(CrawlSpider):
             "http://www.zhihu.com/login/phone_num",
             formdata = {
                 '_xsrf':self._xsrf,
-                'password':'xxxxx',
+                'password':'xxxxxxx',
                 'remember_me':'true',
                 'phone_num':'yyyyyy',
                 'captcha':helper.gen_captcha(response.body, response.headers['content-type'].split('/')[1]),
@@ -103,51 +104,79 @@ class UserInfoSpider(CrawlSpider):
         return []
 
     def pr(self, ar, prefix=''):
-        if len(ar)==0: return
-        s="\n" + prefix + "\n".join(ar)
-        open('crawl.txt', 'a').write(s)
-        #for a in ar:
-            #print(a)
+        #if len(ar)==0: return
+        #s="\n" + prefix + "\n".join(ar)
+        #open('crawl.txt', 'a').write(s)
+        for a in ar:
+            print(a)
 
     def parse_user(self, response):
         sel = Selector(response)
+        user = ZhihuUser()
+        user['_id'] = user['username'] = response.url.split('/')[-2]
         #url
-        self.pr([response.url])
+        user['url'] = response.url
         #nick
-        self.pr(sel.xpath('//a[@class="name"]/text()').extract(), '昵称:')
+        user['nickname'] = ''.join(sel.xpath('//a[@class="name"]/text()').extract())
         #bio
-        self.pr(sel.xpath('//span[@class="bio"]/text()').extract(), '简介:')
+        user['bio'] = ''.join(sel.xpath('//span[@class="bio"]/text()').extract())
         #localtion
-        self.pr(sel.xpath('//span[@class="location item"]/@title').extract(), '居住地:')
+        user['location'] = ''.join(sel.xpath('//span[@class="location item"]/@title').extract())
         #employment
-        self.pr(sel.xpath('//span[@class="employment item"]/a/text()').extract(), '公司:')
+        user['employment'] = ''.join(sel.xpath('//span[@class="employment item"]/a/text()').extract())
         #position
-        self.pr(sel.xpath('//span[@class="position item"]/@title').extract(), '职业:')
+        user['position'] = ''.join(sel.xpath('//span[@class="position item"]/@title').extract())
         #edu
-        self.pr(sel.xpath('//span[@class="education item"]/a/text()').extract(), '教育经历:')
-        self.pr(sel.xpath('//span[@class="education-extra item"]/@title').extract())
-        #profile
-        desc = ['赞同', '感谢', '收藏', '分享']
+        scho = ''.join(sel.xpath('//span[@class="education item"]/a/text()').extract())
+        ext = ''.join(sel.xpath('//span[@class="education-extra item"]/@title').extract())
+        user['education'] = scho + ' ' + ext
+        #followe
+        res = sel.xpath("//a[@class='item']/strong/text()").extract()
+        followee_num =user['followee'] = res[0]
+        follower_num = user['follower']= res[1]
+        #profile [赞同, 感谢, 收藏, 分享]
         res = (sel.xpath('//div[@class="zm-profile-module-desc"]/span/strong/text()').extract())
-        for i, e in enumerate(res): res[i] = desc[i]+e
-        self.pr(res)
+        user['agree']   = res[0]
+        user['thanks']  = res[1]
+        user['fav'] = res[2]
+        user['share']   = res[3]
+        #[提问, 回答, 文章, 收藏, 公共编辑]
+        res = sel.xpath("//div[@class='profile-navbar clearfix']/a[@class='item ']/span/text()").extract()
+        if len(res) ==5:
+            user['ask'] = res[0]
+            user['answer'] = res[1]
+            user['post'] = res[2]
+            user['collection'] = res[3]
+            user['log'] = res[4]
+        #update time
+        user['update_time'] = str(datetime.datetime.now())
+        yield user
 
-        self.pr(["\n\n"])
         #self.dbg(response)
-        url = re.sub('about$', 'followees', response.url)
-        url = re.sub('https:', 'http:', url)
-        print url
-        return Request(url, meta={'cookiejar':1}, headers=self.headers)
-        return []
 
-    #def parse(self, response):
-        #sel = Selector(response)
-        #sites = sel.xpath('//div[@class="explore-feed feed-item"]')
-        #for site in sites:
-            #for s in (site.xpath('h2/a[@class="question_link"]/text()').extract()):
-                #print s
-        #open('test.html', 'w').write(response.text.encode('utf-8'))
-        #return []
+        num = int(followee_num) if followee_num else 0
+        page_num = num/20 + (1 if num%20 else 0)
+        page_num = 1
+        hash_id = ''.join(sel.xpath('//div[@class="zm-profile-header-op-btns clearfix"]/button/@data-id').extract())
+        for i in xrange(page_num):
+            params = json.dumps({"hash_id":hash_id,"order_by":"created","offset":i*20})
+            payload = {"method":"next", "params": params} #, "_xsrf":self._xsrf}
+            yield Request("https://www.zhihu.com/node/ProfileFolloweesListV2?"+urlencode(payload),
+                    meta={'cookiejar':1}, headers=self.headers)
+                    #callback=self.parse_follow_url)
+        return
+
+        num = int(follower_num) if follower_num else 0
+        page_num = num/20 + (1 if num%20 else 0)
+        for i in xrange(page_num):
+            params = json.dumps({"hash_id":hash_id,"order_by":"created","offset":i*20})
+            payload = {"method":"next", "params": params} #, "_xsrf":_xsrf}
+            yield Request("http://www.zhihu.com/node/ProfileFollowersListV2?"+urlencode(payload),
+                    meta={'cookiejar':1}, headers=self.headers)
+                    #callback=self.parse_follow_url)
+        #url = re.sub('about$', 'followees', response.url)
+        #url = re.sub('https:', 'http:', url)
+        #yield Request(url, meta={'cookiejar':1}, headers=self.headers)
 
     def dbg(self, response):
         #start debug shell

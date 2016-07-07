@@ -1,8 +1,8 @@
 # -*- coding=utf-8 -*-
 from scrapy.spiders import Spider
 from scrapy.selector import Selector
-
-from zhihu.items import ZhihuItem
+from scrapy.spiders import CrawlSpider, Rule
+from scrapy.linkextractors import LinkExtractor
 
 from scrapy.http import Request,FormRequest
 from zhihu.settings import *

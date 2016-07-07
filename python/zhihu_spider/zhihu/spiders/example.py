@@ -1,8 +1,6 @@
 from scrapy.spiders import Spider
 from scrapy.selector import Selector
 
-from zhihu.items import ZhihuItem
-
 from scrapy.http import Request,FormRequest
 from zhihu.settings import *
 
